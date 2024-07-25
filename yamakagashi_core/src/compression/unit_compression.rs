@@ -22,24 +22,25 @@ use num::{rational::Ratio, integer::lcm};
 
 // unit transform and compression
 
-pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::iter::StepBy<std::iter::Skip<std::slice::Iter<'_, u8>>>>>>, quality: i32) -> (i32, Vec<i32>) {
+pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::iter::StepBy<std::iter::Skip<std::slice::Iter<'_, u8>>>>>>, quality: i32) -> Vec<f32> {
     let n: usize = b.len();
-    let x:Vec<Ratio<i32>> = if n%2 == 0{(0..n).map(|i| Ratio::new(-(n as i32)+1 + 2*i as i32, 2)).collect::<Vec<Ratio<i32>>>()}
-            else{(0..n).map(|i| Ratio::from_integer((-(n as i32)+1)/2 + i as i32)).collect::<Vec<Ratio<i32>>>()}; // x == [(-n+1)/2, (-n+3)/2..(n-3)/2,(n-1)/2]
+    let x:Vec<f32> = 
+            if n%2 == 0{(0..n).map(|i| ((-(n as i32)+1 + 2*i as i32) as f32 / 2f32)).collect::<Vec<f32>>()}
+            else{(0..n).map(|i| ((-(n as i32)+1)/2 + i as i32) as f32).collect::<Vec<f32>>()}; // x == [(-n+1)/2, (-n+3)/2..(n-3)/2,(n-1)/2]
     let b_sq_norm = b.sq_norm();
 
-    let mut a = vec![Ratio::ZERO; n];
-    let mut c = vec![Ratio::ZERO; n];
-    let mut l = vec![Ratio::ZERO; n];
-    let mut f = vec![Ratio::ZERO; n];
-    let mut power_x = vec![Ratio::ONE; n];
+    let mut a = vec![0f32; n];
+    let mut c = vec![0f32; n];
+    let mut l = vec![0f32; n];
+    let mut f = vec![0f32; n];
+    let mut power_x = vec![1f32; n];
 
-    let mut error_1 = Ratio::ZERO;
-    let mut error_2 = Ratio::ZERO;
-    let mut error_a = Ratio::ZERO;
+    let mut error_1 = 0f32;
+    let mut error_2 = 0f32;
+    let mut error_a = 0f32;
 
-    let mut ssd = Ratio::ZERO;
-    let mut sse = Ratio::ZERO;
+    let mut ssd = 0f32;
+    let mut sse = 0f32;
 
     for i in 0..n {
         let m = i / 2;
@@ -48,8 +49,8 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         power_x.hadamard_product(&x);
 
         // make new f
-        if i == 0 {f[0] = Ratio::ONE / l[0];}
-        else if i == 1 {f[1] = Ratio::ONE / l[1];}
+        if i == 0 {f[0] = 1f32 / l[0];}
+        else if i == 1 {f[1] = 1f32 / l[1];}
         else {
             if i % 2 == 0 {
                 error_1 = l[m..2 * m].dot(f.iter().skip(0).step_by(2).take(m));
@@ -87,20 +88,20 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         sse = &b_sq_norm - a.dot(&c);
         if i == 0 {
             ssd = sse;
-            if ssd <= Ratio::from_integer(5) {return coeffs_organize(a);}
-        } else if is_quality_satisfy(quality, sse, ssd) {return coeffs_organize(a);}
+            if ssd <= 5 as f32 {return a;}
+        } else if is_quality_satisfy(quality, sse, ssd) {return a;}
     }
-    return coeffs_organize(a);
+    return a;
 }
 
-fn is_quality_satisfy(quality: i32, sse: Ratio<i32>, ssd:Ratio<i32>) -> bool {
-    Ratio::new(quality, 100) <= Ratio::ONE - ssd / sse // quality <= 1 - SSE/SSD
+fn is_quality_satisfy(quality: i32, sse: f32, ssd:f32) -> bool {
+    quality as f32 <= 100f32*(1f32 - ssd / sse) // quality <= 1 - SSE/SSD
 }
-
-fn coeffs_organize(old_coeffs: Vec<Ratio<i32>>) -> (i32, Vec<i32>) {
+/*
+fn coeffs_organize(old_coeffs: Vec<f32>) -> (i32, Vec<i32>) {
     let mut new_coeffs = vec![0; old_coeffs.len()];
     // let denom_lcm = old_coeffs.iter().map(|a| *a.denom()).reduce(|acc, a| lcm(acc, a)).unwrap();
     let denom_lcm = old_coeffs.iter().map(|a| *a.denom()).reduce(|acc, a| lcm(acc, a)).expect("denom over flow?");
     new_coeffs.iter_mut().zip(old_coeffs).for_each(|(new, old)| *new = old.numer()*(denom_lcm/old.denom()));
     (denom_lcm, new_coeffs)
-}
+}*/
