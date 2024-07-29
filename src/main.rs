@@ -34,30 +34,19 @@ fn main() {
     $ yamakagashi help
     $ yamakagashi version
     */
-    let matches = Command::new("yamakagashi").bin_name("yamakagashi")
-        .subcommand_required(true)
-        .subcommands([
+    let matches = Command::new("yamakagashi")
+        .subcommand(
             Command::new("encode")
                 .arg(Arg::new("input_path").required(true).index(1).value_parser(clap::value_parser!(PathBuf)))
                 .arg(Arg::new("output_path").required(false).index(2).value_parser(clap::value_parser!(PathBuf)))
-                .arg(Arg::new("quality").required(false).index(3).value_parser(clap::value_parser!(i32).range(0..=100))),
-            /*{clap::command!("encode").args([
-                // clap::arg!(-i <INPUT_PATH>).value_parser(clap::value_parser!(PathBuf)),
-                Arg::new("input_path").required(true).short('i').index(1).value_parser(clap::value_parser!(PathBuf)),
-                // clap::arg!(-o [OUTPUT_PATH]).value_parser(clap::value_parser!(PathBuf))
-                Arg::new("output_path").required(false).short('o').index(2).value_parser(clap::value_parser!(PathBuf))
-                .help("If no value is entered, a yama file with the same name as the input file will be output."),
-                // clap::arg!(-q [QUALITY]).value_parser(clap::value_parser!(i32).range(0..=100)).default_value("85")
-                Arg::new("quality").required(false).short('q').index(3).value_parser(clap::value_parser!(u8))
-                .help("Quality ranges from 0 to 100, with the default value being 85."),
-                ]),}*/
+                .arg(Arg::new("quality").required(false).index(3).value_parser(clap::value_parser!(i32).range(0..=100)))
+            )
+        .subcommand(
             Command::new("decode")
                 .arg(Arg::new("input_path").required(true).index(1).value_parser(clap::value_parser!(PathBuf)))
                 .arg(Arg::new("output_path").required(false).index(2).value_parser(clap::value_parser!(PathBuf)))
-            /*clap::command!("decode").args([
-                clap::arg!(-i <INPUT_PATH>).value_parser(clap::value_parser!(PathBuf)),
-                clap::arg!(-o <OUTPUT_PATH>).value_parser(clap::value_parser!(PathBuf)),*/
-        ]).get_matches();
+            )
+        .get_matches();
 
     /*{let input_path = matches.get_one::<PathBuf>("input_path").unwrap();
     let temp_path = PathBuf::from(input_path.file_name().unwrap()).with_extension("yama");
@@ -83,11 +72,11 @@ fn main() {
         }
 
 
-        Some(("decode", _)) => {
+        Some(("decode", matches)) => {
             let input_path = matches.get_one::<PathBuf>("input_path").unwrap();
             let output_path = match matches.get_one::<PathBuf>("output_path") {
                 Some(output_path) => output_path,
-                _ => &PathBuf::from(input_path.file_name().unwrap()).with_extension("yama"),
+                _ => &PathBuf::from(input_path.file_name().unwrap()).with_extension("bmp"),
             };
             do_decode(input_path, output_path)},
 

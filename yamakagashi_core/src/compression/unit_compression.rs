@@ -18,7 +18,6 @@
 /// R^2 = 1 - |b-b'|^2/|b-b_m|^2 , b_m is mean of b
 
 use crate::my_vector::{VecTool, HadamardProduct};
-use num::{rational::Ratio, integer::lcm};
 
 // unit transform and compression
 

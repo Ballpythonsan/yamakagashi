@@ -60,18 +60,27 @@ pub fn do_decode(input_path:&PathBuf, output_path:&PathBuf) -> io::Result<()> {
     // convert yamakagashi to bitmap
     let bitmap_vec = yamakagashi_to_bitmap(yamakagashi_image_data, number_of_colors, image_size);
     
+    let row_size = (3 * image_size.0 + 3) & !3; // 24ビットカラー、各行は4バイトの倍数にパディング
+    let image_size_with_padding = row_size * image_size.1;
+    
+    
+    
+    
+    
     // edit header
     let signature = b"BM";
-    let header_padding = &[0u8; 12];
+    let file_size = (14 + 40 + image_size_with_padding) as u32;
+    let booking_space = &[0, 0, 0, 0];
+    let image_data_offset: u32 = 14 + 40;
 
     let header_size = 40u32;
     let width = image_size.0;
     let height = image_size.1;
-    let planes = 0u16;
+    let planes = 1u16;
     let bit_count = 24u16;
 
     let compression = 0u32;
-    let size_image = 0u32;
+    let size_image = image_size_with_padding as u32;
     let x_pels_per_meter = 0i32;
     let y_pels_per_meter = 0i32;
     let clr_used = 0u32;
@@ -81,7 +90,9 @@ pub fn do_decode(input_path:&PathBuf, output_path:&PathBuf) -> io::Result<()> {
     let mut output_file = BufWriter::new(File::create(output_path)?);
 
     output_file.write(signature)?;
-    output_file.write(header_padding)?;
+    output_file.write_u32::<LittleEndian>(file_size)?;
+    output_file.write(booking_space)?;
+    output_file.write_u32::<LittleEndian>(image_data_offset)?;
     output_file.write_u32::<LittleEndian>(header_size)?;
     output_file.write_u32::<LittleEndian>(width)?;
     output_file.write_u32::<LittleEndian>(height)?;
@@ -95,8 +106,8 @@ pub fn do_decode(input_path:&PathBuf, output_path:&PathBuf) -> io::Result<()> {
     output_file.write_u32::<LittleEndian>(clr_used)?;
     output_file.write_u32::<LittleEndian>(clr_important)?;
 
-    let row_padding = &vec![0; ((width*3 + 3)/4*4) as usize];
-    for row in bitmap_vec.chunks(width as usize) {
+    let row_padding = &vec![0; ((4-(width*3%4))%4) as usize];
+    for row in bitmap_vec.chunks((number_of_colors as u32*width) as usize) {
         output_file.write_all(row)?;
         output_file.write_all(row_padding)?;
     }
@@ -145,7 +156,7 @@ fn bitmap_opener(input_path:&PathBuf) -> io::Result<((u32, u32), Vec<u8>)> {
         pixel_data.extend_from_slice(&row[0..pixel_row_size]);
     }
 
-    Ok(((height.abs() as u32, width.abs() as u32), pixel_data))
+    Ok(((width.abs() as u32, height.abs() as u32), pixel_data))
 
 }
 
@@ -161,6 +172,7 @@ fn yamakagashi_opener(input_path:&PathBuf) -> io::Result<((u32, u32), u8, Vec<u8
 
     let mut virsion = [0; 2];
     input_file.read_exact(&mut virsion)?;
+    
     let width = input_file.read_u32::<BigEndian>()?;
     let height = input_file.read_u32::<BigEndian>()?;
     let number_of_colors = input_file.read_u8()?;

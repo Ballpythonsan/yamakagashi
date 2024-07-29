@@ -21,14 +21,15 @@ fn page_compression(page: std::iter::Take<std::iter::StepBy<std::iter::Skip<std:
     let mut compressed_page: Vec<LinkedList<(u8, Vec<f32>)>> = vec![LinkedList::new(); size.1 as usize];
     
     // let page_clone = page.clone();
-    let mut rows_turning_points: Vec<LinkedList<usize>> = vec![LinkedList::new(); size.0 as usize];
+    let mut rows_turning_points: Vec<LinkedList<usize>> = vec![LinkedList::new(); size.1 as usize];
     for (i,turning_points) in rows_turning_points.iter_mut().enumerate() {
-        *turning_points = turning_points_of(page.clone().skip(size.1 as usize * i).take(size.1 as usize));
+        *turning_points = turning_points_of(page.clone().skip(size.0 as usize * i).take(size.0 as usize));
     }
     
-    let mut pre_point: usize = 0;
     for (i, (turning_points, compressed_row)) in rows_turning_points.iter().zip(compressed_page.iter_mut()).enumerate() {
+        let mut pre_point: usize = 0;
         for &turning_point in turning_points {
+            if pre_point >= turning_point {panic!("pre_point is bigger than turning_pint, pre_point:{pre_point}, turning_point:{turning_point}")}
             let unit = page.clone().skip(size.0 as usize*i+pre_point).take(turning_point-pre_point);
             let coeffs: Vec<f32> = unit_compression(unit, quality);
             compressed_row.push_back(((turning_point-pre_point) as u8, coeffs));
@@ -49,7 +50,7 @@ fn turning_points_of<'a, I>(row: I) -> LinkedList<usize> where I: Iterator<Item 
     // Gaussian and Laplacian filter
     let mut temp: Vec<i32> = vec![0; n];
     for (i, &pixel) in (0..n).zip(row) {
-        if i > 2 {
+        if i >= 2 {
             temp[i - 2] += pixel as i32;
         }
         if i < n - 1 {
@@ -73,7 +74,12 @@ fn turning_points_of<'a, I>(row: I) -> LinkedList<usize> where I: Iterator<Item 
 
 fn organize(yamakagashi: &Vec<Vec<LinkedList<(u8, Vec<f32>)>>>, pixels: usize) -> Vec<u8> {
 
-    let count = 4*pixels + 5*yamakagashi.iter().map(|row| row.len()).sum::<usize>();
+    let pixel_bytes_size: usize = yamakagashi.len();
+    const COEFF_BYTES_SIZE: usize = 4;
+
+
+    let count = pixel_bytes_size*COEFF_BYTES_SIZE*pixels 
+        + yamakagashi.iter().map(|page| page.iter().map(|row| row.len()).sum::<usize>()).sum::<usize>();
     let mut yamakagashi_bytes: Vec<u8> = Vec::with_capacity(count);
 
     for color_page in yamakagashi {
