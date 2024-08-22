@@ -1,6 +1,6 @@
 /target
 /.vscode
 index.html
-output.bmp
-test.bmp
-test.yama
+*.bmp
+*.png
+*.yama

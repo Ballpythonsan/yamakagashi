@@ -21,14 +21,17 @@ pub fn image_decompression(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, si
 
             let mut skip = 0;
             for (unit_size, unit_coeffs) in page_row {
-
                 let temp_unit = unit_decompression(*unit_size as usize, unit_coeffs);
                 image.iter_mut().skip(select_color).step_by(number_of_colors as usize) // select color
-                    .skip(i*size.0 as usize) // select row
-                    .skip(skip).take(*unit_size as usize) // select unit
+                .skip(i*size.0 as usize) // select row
+                .skip(skip).take(*unit_size as usize) // select unit
                 .zip(temp_unit.iter()).for_each(|(a, b)| *a = *b);
-                skip += *unit_size as usize;
-            }
+            skip += *unit_size as usize;
+            /*if i == 34 {
+                println!("coeffs:\n{:?}",unit_coeffs);
+                println!("unit:\n{:?}\n",temp_unit);
+            }*/
+        }
             assert_eq!(skip, size.0 as usize);
         }
     }
@@ -39,7 +42,7 @@ pub fn image_decompression(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, si
 fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
 
     assert_eq!(unit_size, unit_coeffs.len());
-    let mut temp_unit: Vec<f32> = vec![0f32; unit_size];
+    let mut temp_unit: Vec<f64> = vec![0f64; unit_size];
 
     let mut zero_run_point = unit_size;
     for &coeff in unit_coeffs.iter().rev() {
@@ -47,17 +50,24 @@ fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
         zero_run_point -= 1;
     }
     
-    let x:Vec<f32> = 
-        if unit_size%2 == 0{(0..unit_size).map(|i| (-(unit_size as i32)+1 + 2*i as i32) as f32/2f32).collect::<Vec<f32>>()}
-        else{(0..unit_size).map(|i| ((-(unit_size as i32)+1)/2 + i as i32) as f32).collect::<Vec<f32>>()};
+    let x:Vec<f64> = 
+        if unit_size%2 == 0{(0..unit_size).map(|i| (-(unit_size as i32)+1 + 2*i as i32) as f64/2f64).collect::<Vec<f64>>()}
+        else{(0..unit_size).map(|i| ((-(unit_size as i32)+1)/2 + i as i32) as f64).collect::<Vec<f64>>()};
 
-    let mut power_x = vec![1f32; unit_size];
-    for (_, &coeff) in (0..zero_run_point).zip(unit_coeffs) {
-        temp_unit.iter_mut().zip(power_x.iter()).for_each(|(a,b)| *a += *b*coeff);
+    let mut power_x = vec![1f64; unit_size];
+    for (i, &coeff) in (0..zero_run_point).zip(unit_coeffs) {
+        // temp_unit.iter_mut().zip(power_x.iter()).for_each(|(a,b)| *a += *b*coeff as f64 * (6.0*i as f64).exp2());
+        let log_size = (unit_size as f64).log2();
+        let forecast_coeff = (7.0 - i as f64 * (log_size - 1.0)).trunc();
+        temp_unit.iter_mut().zip(power_x.iter()).for_each(|(a,b)| *a += *b*coeff as f64 * forecast_coeff.exp2());
         power_x.hadamard_product(&x);
     }
 
-    temp_unit.iter().map(|a| a.round() as u8).collect()
+    temp_unit.iter().map(|a| {
+        if *a < 0.0 {0u8}
+        else if 255.0 < *a {255u8}
+        else {a.round() as u8}
+    }).collect()
 }
 
 fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32)) -> Vec<Vec<LinkedList<(u8, Vec<f32>)>>> {
@@ -86,7 +96,10 @@ fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32))
 
                 row_size += unit_size as u32;
             }
-            assert_eq!(row_size,size.0);
+            if row_size != size.0 {
+                println!("This is incorrect file, row size and sum all unit are not same!");
+                // println!("{:?}", yamakagashi_units.iter().map(|a| a.0).collect::<Vec<u8>>());
+            }
             yamakagashi_row.push(yamakagashi_units);
         }
         yamakagashi.push(yamakagashi_row);
