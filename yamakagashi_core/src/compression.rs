@@ -62,76 +62,37 @@ fn page_compression(page: std::iter::Take<std::iter::StepBy<std::iter::Skip<std:
 }
 
 fn turning_points_of<'a, I>(row: I) -> LinkedList<usize> where I: Iterator<Item = &'a u8> + ExactSizeIterator + Clone {
+
     let n: usize = row.len();
-    let row: Vec<i32> = row.clone().map(|&x| x as i32).collect();
-    // Gaussian and Laplacian filter
-    let mut temp: Vec<i32> = vec![0; n];
-    for i in 2..n - 2 {
-        temp[i] = row[i - 2] + 2 * row[i - 1] + 4 * row[i] + 2 * row[i + 1] + row[i + 2];
-    }
-    let mut temp2: Vec<i32> = vec![0; n];
-    for (i, ele) in (0..n).zip(row) {
-        if i == 0 {
-            temp2[i+1] +=   ele;
-            temp2[i] += 2*ele;
-            temp2[i]   += 4*ele;
-            temp2[i+1] += 2*ele;
-            temp2[i+2] +=   ele;
-        }
-        else if i == 1 {
-            temp2[i-1] +=   ele;
-            temp2[i-1] += 2*ele;
-            temp2[i]   += 4*ele;
-            temp2[i+1] += 2*ele;
-            temp2[i+2] +=   ele;
-        }
-        else if i == n-2 {
-            temp2[i-2] +=   ele;
-            temp2[i-1] += 2*ele;
-            temp2[i]   += 4*ele;
-            temp2[i+1] += 2*ele;
-            temp2[i+1] +=   ele;
-        }
-        else if i == n-1 {
-            temp2[i-2] +=   ele;
-            temp2[i-1] += 2*ele;
-            temp2[i]   += 4*ele;
-            temp2[i] += 2*ele;
-            temp2[i-1] +=   ele;
-        }
-        else {
-            temp2[i-2] +=   ele;
-            temp2[i-1] += 2*ele;
-            temp2[i]   += 4*ele;
-            temp2[i+1] += 2*ele;
-            temp2[i+2] +=   ele;
-        }
-    }
-    // if temp != temp2 {println!("temp and temp2 arn't equal\n{:>4?}",temp);}
-    // println!("gaussian:\n{:>4?}\n",temp2);
-    
-    // Apply Laplacian filter
-    let mut laplacian = vec![0; n];
-    for i in 1..n - 1 {
-        laplacian[i] = temp2[i - 1] - 2 * temp2[i] + temp2[i + 1];
-    }
-    // println!("laplacian:\n{:>4?}\n",laplacian);
-    
+    let s_row:Vec<i32> = row.clone().scan(0i32, |acc, &x| { *acc += x as i32; Some(*acc) }).collect();
+    let l_row:Vec<i32> = row.clone().enumerate().scan(0i32, |acc, (i, x)| {*acc += (i as i32+1)*(*x as i32); Some(*acc)}).collect();
+    let mut prepoint = 0usize;
     let mut turning_points: LinkedList<usize> = LinkedList::new();
-    // let threshold = 5;
-    // Look for edge (zero-crossing in Laplacian)
-    for i in 0..n {
+
+    for (point, ele) in (0..n).zip(row) {
         
-        if i == u8::MAX as usize + match turning_points.back() {Some(x) => x,None => &0,} {turning_points.push_back(i);}
-        if i == 0 || i == n-1 {continue;}
-        if (laplacian[i - 1].signum() * laplacian[i].signum() == -1) || // (1 , -1), (-1, 1)
-            (laplacian[i] == 0 && laplacian[i - 1].signum()*laplacian[i + 1].signum() == -1) // || // (-1, 0, 1), (1, 0, -1)
-            // (laplacian[i] == 0 && laplacian[i - 1].signum()*laplacian[i + 1] ==  1 && (laplacian[i - 1]-laplacian[i + 1]).abs() > threshold) // (1, 0, 1), (-1, 0, -1)
-            {
-                turning_points.push_back(i);
+        if point == 0 { continue; }
+        if point == u8::MAX as usize + match turning_points.back() {Some(x) => x,None => &0,} {
+            turning_points.push_back(point);
+        }
+
+        let width = (point - prepoint) as i32;
+        if width == 1 {continue;}
+
+
+        let sum = if prepoint == 0 { s_row[point-1] - 0 } else { s_row[point-1] - s_row[prepoint-1] };
+        let bias_sum = if prepoint == 0 { l_row[point-1] - 0 } else { l_row[point-1] - l_row[prepoint-1] } - sum*(width+1)/2 - sum*prepoint as i32;
+        let sqsum = width*(width*width-1)/6;
+        let diff_coeff = bias_sum*2 / sqsum;
+
+        
+        let yosou = sum/width + diff_coeff*(width+1)/2;
+        if (*ele as i32 - yosou).abs() > 5 {
+            turning_points.push_back(point);
+            prepoint = point;
         }
     }
-    // assert!(turning_points.is_empty());
+    
     turning_points
 }
 
@@ -161,7 +122,7 @@ fn organize(yamakagashi: &Vec<Vec<LinkedList<(u8, Vec<f32>)>>>, pixels: usize) -
 fn points_test(){
     let row = vec![100,100,100,100,100,100,120,140,160,180,200,220,240,100,100,100,100,100];
     let points = turning_points_of(row.iter());
-
+    println!("{:?}", points);
     let mut pre_point = 0;
     println!("cut row:");
     for i in points {
