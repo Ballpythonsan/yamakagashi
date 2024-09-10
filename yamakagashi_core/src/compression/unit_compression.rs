@@ -17,7 +17,7 @@
 /// R^2 = 1 - sse/ssd
 /// R^2 = 1 - |b-b'|^2/|b-b_m|^2 , b_m is mean of b
 
-use std::u8::MAX;
+use std::{cmp::min, u8::MAX};
 use crate::my_vector::{VecTool, HadamardProduct};
 
 // unit transform and compression
@@ -99,41 +99,40 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         if i == 0 {
             ssd = sse;
             if ssd*(255.0*255.0) <= (n*(MAX as usize*MAX as usize)*13*13) as f64 {return round_to_f32(a);} // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
+            // if ssd <= (5*n) as f64 {return round_to_f32(a);} // ssd/n <= 5
         } else if is_quality_satisfy(quality, sse, ssd) {return round_to_f32(a);}
     }
+    println!("Not satisfy (T_T) final quality is: {:.3}, sse:{sse:.3}, ssd:{ssd:.3}", 1.0 - sse/ssd);
     return round_to_f32(a);
 }
 
 fn is_quality_satisfy(quality: i32, sse: f64, ssd:f64) -> bool {
-    quality as f64 *ssd <= 100.0*(ssd - sse) // quality <= 1 - SSE/SSD
+    quality as f64 *ssd <= 100.0*(ssd - sse) // quality/100 <= 1 - SSE/SSD
+    // quality as f64/100.0 <= 1.0 - sse/ssd // quality/100 <= 1 - SSE/SSD
 }
 
 fn round_to_f32(vec:Vec<f64>) -> Vec<f32>{
-    // todo!("coeffsを何次の係数かとunitのsizeで、ある程度浮動小数点数の指数部を決めてそれとの差を記録する");
-    // todo!("今は次数のみで決まってるのでunitのsizeは後で作れ");
-    // println!("{:?}", vec);
+
     let size = vec.len();
-    let mut out_vec: Vec<f32> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1)) // ln2 ~ 0.69314718056
-    /*for (i, &ele) in vec.iter().enumerate() {
-        // if ele > f32::MAX as f64 {panic!("bigger than f32 max!");}
-        // if ele < f32::MIN as f64 {panic!("smaller than f32 min!");}
-        // if ele != 0.0 && ele.abs() < f32::EPSILON as f64 {
-        //     print!("smaller than f32 min!     ");
-        //     out_vec.push(f32::EPSILON);
-        //     continue;
-        // }
-        // let ex = ((ele.to_bits() >> 52) & 0x7FF) as i32 - 1023; // sign*1 exponent*11 mantissa*52
-        // print!("{}, ", if ex == -1023 {0}else{ex + (6*i) as i32});
-        
-        // println!("{}",(6.0*i as f64).exp2());
-        out_vec.push((ele*(6.0*i as f64).exp2()) as f32); // 6*i is magic number
-    }*/
+    let mut out_vec: Vec<f32> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
+    
     vec.iter().enumerate().for_each(|(i, ele)| {
+        // if ele > &(f32::MAX as f64) {panic!("bigger than f64 max!");}
+        // if ele < &(f32::MIN as f64) {panic!("smaller than f64 min!");}
         let log_size = (size as f64).log2();
-        let forecast_coeff = (i as f64 * (log_size - 1.0) - 7.0).trunc(); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
+        let forecast_coeff = min(1023, (i as f64 * (log_size - 1.0) - 7.0).trunc() as i32) as f64; // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
+        if ele*forecast_coeff.exp2() > f32::MAX as f64 {panic!("biger than f32 max!, value is:{ele}")}
+        if (ele*forecast_coeff.exp2()).abs() < f32::EPSILON as f64 && &0.0 != ele {
+            panic!("smaller than f32 epsilon!, value is:{ele}")
+        }
+        if (ele * forecast_coeff.exp2()).is_nan() {
+            println!("{ele} : {forecast_coeff}");
+            println!("{}", ele*forecast_coeff.exp2());
+            panic!("NaN!")
+        }
         out_vec.push((ele * forecast_coeff.exp2()) as f32)
-        // out_vec.push((ele*((6*i) as f64 .exp2())) as f32) // 6*i is magic number
     });
+    
     out_vec
 }
 
