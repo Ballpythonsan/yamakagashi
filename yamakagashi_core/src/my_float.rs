@@ -174,6 +174,7 @@ impl MyFp48 {
     // mul
     fn multiply(self, other: Self) -> Self {
 
+        if self.is_zero() || other.is_zero() { return Self::ZERO; }
         // a*2^exp * 2^(extension*2^8) * b*2^exp2 * 2^(extension2*2^8) = (a*2^exp)*(b*2^exp2)*2^((extension+extension2)*2^8)
         let temp_base = self.mantissa() * other.mantissa();
         if temp_base.is_nan() || temp_base.is_infinite() { panic!("base is Nan or infinity!, I'll write this pattern later") }
@@ -190,6 +191,8 @@ impl MyFp48 {
     // dev
     fn divide(self, other: Self) -> Self {
         
+        if other.is_zero() { panic!("div 0!") }
+        if self.is_zero() { return self; }
         // a*2^exp * 2^(extension*2^8) / b*2^exp2 * 2^(extension2*2^8) = (a*2^exp)/(b*2^exp2)*2^((extension-extension2)*2^8)
         let temp_base = self.mantissa() / other.mantissa();
         if temp_base.is_nan() || temp_base.is_infinite() { panic!("base is Nan or infinity!, I'll write this pattern later") }
