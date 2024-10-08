@@ -17,62 +17,54 @@
 /// R^2 = 1 - sse/ssd
 /// R^2 = 1 - |b-b'|^2/|b-b_m|^2 , b_m is mean of b
 
-use std::{cmp::min, u8::MAX};
+use crate::my_float::MyFp48;
 use crate::my_vector::{VecTool, HadamardProduct};
 
 // unit transform and compression
 
 pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::iter::StepBy<std::iter::Skip<std::slice::Iter<'_, u8>>>>>>, quality: i32) -> Vec<f32> {
     let n: usize = b.len();
-    let x:Vec<f64> = 
-            if n%2 == 0{(0..n).map(|i| ((-(n as i32)+1 + 2*i as i32) as f64 / 2f64)).collect::<Vec<f64>>()}
-            else{(0..n).map(|i| ((-(n as i32)+1)/2 + i as i32) as f64).collect::<Vec<f64>>()}; // x == [(-n+1)/2, (-n+3)/2..(n-3)/2,(n-1)/2]
+    let x:Vec<MyFp48> = (0..n).map(|i| MyFp48::new((-(n as i32)+1 + 2*i as i32) as f32 / 2.0)).collect(); // x == [(-n+1)/2, (-n+3)/2..(n-3)/2,(n-1)/2]
     let b_sq_norm = b.sq_norm();
 
-    let mut a = vec![0f64; n];
-    let mut c = vec![0f64; n];
-    let mut l = vec![0f64; n];
-    let mut f = vec![0f64; n];
-    let mut power_x = vec![1f64; n];
+    let mut a = vec![MyFp48::ZERO; n];
+    let mut c = vec![MyFp48::ZERO; n];
+    let mut l = vec![MyFp48::ZERO; n];
+    let mut f = vec![MyFp48::ZERO; n];
+    let mut power_x = vec![MyFp48::ONE; n];
 
-    let mut error_1 = 0f64;
-    let mut error_2 = 0f64;
-    let mut error_a = 0f64;
+    // let mut error_1 = MyFp48::ZERO;
+    let mut error_2 = MyFp48::ZERO; // push in for-loop later
+    //let mut error_a = MyFp48::ZERO;
 
-    let mut ssd = 0f64;
-    let mut sse = 0f64;
+    let mut ssd = MyFp48::ZERO;
+    let mut sse = MyFp48::ZERO;
 
     for i in 0..n {
         let m = i / 2;
         c[i] = b.dot(&power_x);
         let temp_l = power_x.sq_norm();
-        l[i] = match temp_l {
-            f64::INFINITY | f64::NEG_INFINITY => {
-                println!("value is INFINITY!, degree is {i}, unit size is {n}\nsqR is {}\n",1.0-sse/ssd);
-                return round_to_f32(a);
-            },
-
-            _ => temp_l,
-        };
+        l[i] = if temp_l.is_normal() || temp_l.is_zero() { temp_l }
+        else { panic!("value is NORMAL!, degree is {i}, unit size is {n}"); };
         power_x.hadamard_product(&x);
 
         // make new f
-        if i == 0 {f[0] = 1f64 / l[0];}
-        else if i == 1 {f[1] = 1f64 / l[1];}
+        if i == 0 {f[0] = MyFp48::ONE / l[0];}
+        else if i == 1 {f[1] = MyFp48::ONE / l[1];}
         else {
             if i % 2 == 0 {
-                error_1 = l[m..2 * m].dot(f.iter().skip(0).step_by(2).take(m));
+                let error_1 = l[m..2 * m].dot(f.iter().skip(0).step_by(2).take(m));
                 error_2 = l[m + 1..2 * m + 1].dot(f.iter().skip(1).step_by(2).take(m));
-                assert_ne!(error_1-error_2, 0.0);
+                assert_ne!(error_1-error_2, MyFp48::ZERO);
                 f.iter_mut().skip(0).step_by(2).take(m).for_each(|a| *a /= error_1-error_2);
                 for j in 0..m {
                     let _temp = f[1 + 2 * j];
                     f[2 + 2 * j] -= _temp / (error_1-error_2);
                 }
             } else {
-                error_1 = l[m + 1..2 * m + 1].dot(f.iter().skip(0).step_by(2).take(m + 1));
+                let error_1 = l[m + 1..2 * m + 1].dot(f.iter().skip(0).step_by(2).take(m + 1));
                 // error_2 = &l[m   : 2*m].dot(&f.iter().skip(0).step_by(2).take(m));
-                assert_ne!(error_1-error_2, 0.0);
+                assert_ne!(error_1-error_2, MyFp48::ZERO);
                 f.iter_mut().skip(1).step_by(2).take(m).for_each(|a| *a /= error_2-error_1);
                 for j in 0..m + 1 {
                     let _temp = f[2 * j];
@@ -83,54 +75,62 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
 
         // make new a
         if i % 2 == 0 {
-            error_a = l[m..2 * m].dot(a.iter().skip(0).step_by(2).take(m));
+            let error_a = l[m..2 * m].dot(a.iter().skip(0).step_by(2).take(m));
             for j in 0..m + 1 {
-                a[2 * j] += (&c[i] - error_a) * f[i % 2 + 2 * j]
+                a[2 * j] += (c[i] - error_a) * f[i % 2 + 2 * j]
             }
         } else {
-            error_a = l[m + 1..2 * m + 1].dot(a.iter().skip(1).step_by(2).take(m));
+            let error_a = l[m + 1..2 * m + 1].dot(a.iter().skip(1).step_by(2).take(m));
             for j in 0..m + 1 {
-                a[1 + 2 * j] += (&c[i] - error_a) * f[1 + 2 * j]
+                a[1 + 2 * j] += (c[i] - error_a) * f[1 + 2 * j]
             }
         }
 
         // quality check
-        sse = &b_sq_norm - a.dot(&c);
+        sse = b_sq_norm - a.dot(&c);
         if i == 0 {
             ssd = sse;
-            if ssd*(255.0*255.0) <= (n*(MAX as usize*MAX as usize)*13*13) as f64 {return round_to_f32(a);} // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
-            // if ssd <= (5*n) as f64 {return round_to_f32(a);} // ssd/n <= 5
-        } else if is_quality_satisfy(quality, sse, ssd) {return round_to_f32(a);}
+            if ssd <= MyFp48::new((n*13*13) as f32) { // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
+                return round_to_f32(a);
+            }
+        } else if is_quality_satisfy(quality, sse, ssd) {
+            return round_to_f32(a);
+        }
     }
-    println!("Not satisfy (T_T) final quality is: {:.3}, sse:{sse:.3}, ssd:{ssd:.3}", 1.0 - sse/ssd);
+
+    println!("quality isn't satisfy (T_T) final quality is: {:.3}", MyFp48::ONE - sse/ssd);
     return round_to_f32(a);
 }
 
-fn is_quality_satisfy(quality: i32, sse: f64, ssd:f64) -> bool {
-    quality as f64 *ssd <= 100.0*(ssd - sse) // quality/100 <= 1 - SSE/SSD
-    // quality as f64/100.0 <= 1.0 - sse/ssd // quality/100 <= 1 - SSE/SSD
+fn is_quality_satisfy(quality: i32, sse: MyFp48, ssd:MyFp48) -> bool {
+    MyFp48::new(quality as f32) *ssd <= MyFp48::new(100.0)*(ssd - sse) // quality/100 <= 1 - SSE/SSD
+    // quality as MyFp48/100.0 <= 1.0 - sse/ssd // quality/100 <= 1 - SSE/SSD
 }
 
-fn round_to_f32(vec:Vec<f64>) -> Vec<f32>{
+fn round_to_f32(vec:Vec<MyFp48>) -> Vec<f32>{
 
     let size = vec.len();
     let mut out_vec: Vec<f32> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
     
-    vec.iter().enumerate().for_each(|(i, ele)| {
-        // if ele > &(f32::MAX as f64) {panic!("bigger than f64 max!");}
-        // if ele < &(f32::MIN as f64) {panic!("smaller than f64 min!");}
+    vec.iter().enumerate().for_each(|(i, coeff)| {
+
         let log_size = (size as f64).log2();
-        let forecast_coeff = min(1023, (i as f64 * (log_size - 1.0) - 7.0).trunc() as i32) as f64; // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
-        if ele*forecast_coeff.exp2() > f32::MAX as f64 {panic!("biger than f32 max!, value is:{ele}")}
-        if (ele*forecast_coeff.exp2()).abs() < f32::EPSILON as f64 && &0.0 != ele {
-            panic!("smaller than f32 epsilon!, value is:{ele}")
+        let forecast_coeff = (i as f64 * (log_size - 1.0) - 7.0).trunc() as i32; // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1)) // forecast max = 2^x(x-1)-7 // x = 8, max = 1785 < 2^11 // x = 16, max = 983033 < 2^20 // my_float32 s1e20f11
+
+        let adjusted_coeff = *coeff*MyFp48::exp2(forecast_coeff);
+
+        match adjusted_coeff.to_record_f32() {
+            Ok(record_f32) => out_vec.push(record_f32),
+            Err("can't express f32, because of this MyFp48 is too small") => out_vec.push(0.0),
+            Err("can't express f32, because of this MyFp48 is too big") => {
+                println!("can't express f32, because of this MyFp48 is too big");
+
+                println!("returns record f32 max instead");
+                let record_f32_max = if adjusted_coeff.sign() == 1 { f32::from_bits(0x7FFF_FFFF) } else { f32::from_bits(0xFFFF_FFFF) };
+                out_vec.push(record_f32_max);
+            },
+            _ => (),
         }
-        if (ele * forecast_coeff.exp2()).is_nan() {
-            println!("{ele} : {forecast_coeff}");
-            println!("{}", ele*forecast_coeff.exp2());
-            panic!("NaN!")
-        }
-        out_vec.push((ele * forecast_coeff.exp2()) as f32)
     });
     
     out_vec
@@ -147,11 +147,26 @@ fn unit_compression_test() {
      = test_case.iter().skip(0).step_by(1).take(test_len).skip(0).take(test_len);
 
     let comp = unit_compression(test_iter, 85);
-    println!("{:?}", comp);
+    //println!("{:?}", comp);
     if comp[0].is_nan() {println!("NaN!")}
     else {
         println!("NOT NaN (T_T)");
         // println!("{:?}", comp)
     }
 
+}
+
+#[test]
+fn cmp() {
+
+    let ele = MyFp48 { base: -0.000000000000000000000000000005458883, extra_exponent: 32768 };
+    let log_size = (132 as f64).log2();
+    let forecast_coeff = (0 as f64 * (log_size - 1.0) - 7.0).trunc() as i32;
+
+    let hoge = ele*MyFp48::exp2(forecast_coeff); // -7
+    let fuga = MyFp48::new(f32::EPSILON);
+    if hoge < fuga {
+        println!("smaller than f32 epsilon!, value is:{ele}");
+        println!("{}\n{}",hoge.exponent(),fuga.exponent())
+    }
 }
