@@ -28,10 +28,6 @@ pub fn image_decompression(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, si
                 .skip(skip).take(*unit_size as usize) // select unit
                 .zip(temp_unit.iter()).for_each(|(a, b)| *a = *b);
             skip += *unit_size as usize;
-            /*if i == 34 {
-                println!("coeffs:\n{:?}",unit_coeffs);
-                println!("unit:\n{:?}\n",temp_unit);
-            }*/
         }
             assert_eq!(skip, size.0 as usize);
         }
@@ -70,9 +66,9 @@ fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
     } ).collect()
 }
 
-fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32)) -> Vec<Vec<LinkedList<(u8, Vec<f32>)>>> {
+fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32)) -> Vec<Vec<LinkedList<(u16, Vec<f32>)>>> {
 
-    let mut yamakagashi: Vec<Vec<LinkedList<(u8, Vec<f32>)>>> = Vec::with_capacity(number_of_colors as usize);
+    let mut yamakagashi: Vec<Vec<LinkedList<(u16, Vec<f32>)>>> = Vec::with_capacity(number_of_colors as usize);
 
     let mut index: usize = 0;
     for _ in 0..number_of_colors {
@@ -80,12 +76,12 @@ fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32))
         let mut yamakagashi_row = Vec::with_capacity(size.1 as usize);
         for _ in 0..size.1 {
 
-            let mut yamakagashi_units: LinkedList<(u8, Vec<f32>)> = LinkedList::new();
+            let mut yamakagashi_units: LinkedList<(u16, Vec<f32>)> = LinkedList::new();
             
             let mut row_size = 0;
             while row_size < size.0 {
-                let unit_size = yamakagashi_bytes[index];
-                index += 1;
+                let unit_size = u16::from_be_bytes(yamakagashi_bytes[index..index+2].try_into().unwrap());
+                index += 2;
                 let mut unit_coeffs = Vec::with_capacity(unit_size as usize);
                 for _ in 0..unit_size {
                     unit_coeffs.push(f32::from_be_bytes(yamakagashi_bytes[index..index+4].try_into().unwrap()));
