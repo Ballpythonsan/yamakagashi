@@ -375,14 +375,41 @@ fn test_my_fp48_operations() {
     let product = a * b;
     let quotient = a / b;
 
-    // println!("zero:       {}", MyFp48::zero().value().unwrap());
-    // println!("one:        {}", MyFp48::one().value().unwrap());
-    // println!("a:          {}", a.value().unwrap());
-    // println!("b:          {}", b.value().unwrap());
+    // println!("zero:       {}", MyFp48::zero().to_record_f32().unwrap());
+    // println!("one:        {}", MyFp48::one().to_record_f32().unwrap());
+    println!("a:          {}", a.to_record_f32().unwrap());
+    println!("b:          {}", b.to_record_f32().unwrap());
 
-    println!("a < b =     {}", a < b);
+    println!("a == b is     {}", a == b);
+    println!("a < b is     {}", a < b);
+    println!("a > b is     {}", a > b);
+    println!("a <= b is     {}", a <= b);
+    println!("a >= b is     {}", a >= b);
     println!("Sum:        {}, {}", sum, sum_);
     println!("Difference: {}, {}", difference, difference_);
     println!("Product:    {}, {}", product, product_);
     println!("Quotient:   {}, {}", quotient, quotient_);
+}
+
+#[test]
+fn test_compare() {
+
+    let a = MyFp48 { base:f32::from_bits(0x8EDD7048), extra_exponent: 0x8000 }; // 0(1000_0000_0000_0000)000_1110_1101_1101_0111_0000_0100_1000
+    let b = MyFp48::new(f32::EPSILON);
+
+    println!("{:X} {:X}", a.base.to_bits(), a.extra_exponent);
+    println!("{:X} {:X}", b.base.to_bits(), b.extra_exponent);
+    println!("a < b is {}", a*MyFp48::exp2(-7) < b);
+    println!("{}",MyFp48::exp2(0))
+}
+
+#[test]
+fn test_value_and_round() {
+
+    // value
+    let a = MyFp48::new(3.14154052734375);
+    assert_eq!(a.to_record_f32().unwrap(), 3.14154052734375);
+
+    let b = 2.25f32.round() as u8;
+    println!("{b}");
 }
