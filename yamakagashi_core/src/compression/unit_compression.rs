@@ -22,7 +22,7 @@ use crate::my_vector::{VecTool, HadamardProduct};
 
 // unit transform and compression
 
-pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::iter::StepBy<std::iter::Skip<std::slice::Iter<'_, u8>>>>>>, quality: i32) -> Vec<f32> {
+pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::iter::StepBy<std::iter::Skip<std::slice::Iter<'_, u8>>>>>>, quality: i32) -> Vec<u16> {
     let n: usize = b.len();
     let x:Vec<MyFp48> = (0..n).map(|i| MyFp48::new((-(n as i32)+1 + 2*i as i32) as f32 / 2.0)).collect(); // x == [(-n+1)/2, (-n+3)/2..(n-3)/2,(n-1)/2]
     let b_sq_norm = b.sq_norm();
@@ -91,15 +91,15 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         if i == 0 {
             ssd = sse;
             if ssd <= MyFp48::new((n*13*13) as f32) { // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
-                return round_to_f32(a);
+                return round_to_record_u16(a);
             }
         } else if is_quality_satisfy(quality, sse, ssd) {
-            return round_to_f32(a);
+            return round_to_record_u16(a);
         }
     }
 
     println!("quality isn't satisfy (T_T) final quality is: {:.3}", MyFp48::ONE - sse/ssd);
-    return round_to_f32(a);
+    return round_to_record_u16(a);
 }
 
 fn is_quality_satisfy(quality: i32, sse: MyFp48, ssd:MyFp48) -> bool {
@@ -107,10 +107,10 @@ fn is_quality_satisfy(quality: i32, sse: MyFp48, ssd:MyFp48) -> bool {
     // quality as MyFp48/100.0 <= 1.0 - sse/ssd // quality/100 <= 1 - SSE/SSD
 }
 
-fn round_to_f32(vec:Vec<MyFp48>) -> Vec<f32>{
+fn round_to_record_u16(vec:Vec<MyFp48>) -> Vec<u16>{
 
     let size = vec.len();
-    let mut out_vec: Vec<f32> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
+    let mut out_vec: Vec<u16> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
     
     vec.iter().enumerate().for_each(|(i, coeff)| {
 
@@ -119,15 +119,17 @@ fn round_to_f32(vec:Vec<MyFp48>) -> Vec<f32>{
 
         let adjusted_coeff = *coeff*MyFp48::exp2(forecast_coeff);
 
-        match adjusted_coeff.to_record_f32() {
+        match adjusted_coeff.to_record_bytes() {
             Ok(record_f32) => out_vec.push(record_f32),
-            Err("can't express f32, because of this MyFp48 is too small") => out_vec.push(0.0),
-            Err("can't express f32, because of this MyFp48 is too big") => {
+            Err("can't express f32, because of this MyFp48 abs is too small") => out_vec.push(0x0000),
+            Err("can't express f32, because of this MyFp48 abs is too big") => {
                 println!("can't express f32, because of this MyFp48 is too big");
 
                 println!("returns record f32 max instead");
-                let record_f32_max = if adjusted_coeff.sign() == 1 { f32::from_bits(0x7FFF_FFFF) } else { f32::from_bits(0xFFFF_FFFF) };
-                out_vec.push(record_f32_max);
+                let record_u16_max: u16 = 
+                if adjusted_coeff.sign() == 1 { 0x7FFF }
+                else { 0xFFFF };
+                out_vec.push(record_u16_max);
             },
             _ => (),
         }
@@ -148,11 +150,11 @@ fn unit_compression_test() {
 
     let comp = unit_compression(test_iter, 85);
     //println!("{:?}", comp);
-    if comp[0].is_nan() {println!("NaN!")}
-    else {
-        println!("NOT NaN (T_T)");
-        // println!("{:?}", comp)
-    }
+    // if comp[0].is_nan() {println!("NaN!")}
+    // else {
+    //     println!("NOT NaN (T_T)");
+    //     // println!("{:?}", comp)
+    // }
 
 }
 

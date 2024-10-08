@@ -83,32 +83,37 @@ impl MyFp48 {
         exponent as i32 - (1 << 23) + 1
     }
 
-    // calc value
-    pub fn to_record_f32(&self) -> Result<f32, &str> {
+    // convert to record bytes
+    // sign 1bit, diff exponent 5bit, fracsion 10bit
+    pub fn to_record_bytes(&self) -> Result<u16, &str> {
  
-        // out f32 havn't NaN and denormal number, but 0 is existing
         let exponent = self.exponent();
         let mantissa_and_sign = self.mantissa_and_sign();
 
-        if self.is_zero() { Ok(0.0) }
-        else if exponent <= -127 {
-            Err("can't express f32, because of this MyFp48 is too small")
-        // } else if exponent == (1 << 25) - 1 - ((1 << 23) - 1) { 
-        } else if 128 <= exponent {
-            Err("can't express f32, because of this MyFp48 is too big")
+        if self.is_zero() { Ok(0x0000) }
+        else if exponent <= -16 {
+            Err("can't express f32, because of this MyFp48 abs is too small")
+        } else if 16 < exponent {
+            Err("can't express f32, because of this MyFp48 abs is too big")
         } else {
-            let base_exponent = (exponent + (1 << 7) - 1) as u32 & 0xFF;
-            Ok(f32::from_bits((mantissa_and_sign.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | base_exponent << 23))
+            let new_sign = if self.sign() == 1 { 0u16 } else {0x8000};
+            let new_exponent = (((exponent + (1 << 4) - 1) & 0x1F) << 10) as u16;
+            let new_mantissa = ((mantissa_and_sign.to_bits() & 0x007F_FFFF) >> 13) as u16;
+
+            Ok(new_sign | new_exponent | new_mantissa)
         }
 
     }
 
-    pub fn from_record_f32(input: f32) -> Self {
+    pub fn from_record_bytes(input: u16) -> Self {
 
-        if input == 0.0 { return MyFp48::ZERO; }
-        let new_exponent = ((input.to_bits() >> 23) & 0xFF) + (1 << 23) - (1 << 7);
+        if input == 0u16 { return MyFp48::ZERO; }
 
-        let new_base = f32::from_bits((input.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent & 0xFF) << 23));
+        let new_base_sign = (input as u32 & 0x8000) << 16;
+        let new_base_mantissa = (input as u32 & 0x03FF) << 13;
+        let new_exponent = ((input as u32 >> 10) & 0x1F) + (1 << 23) - (1 << 4);
+
+        let new_base = f32::from_bits(new_base_sign | ((new_exponent & 0xFF) << 23) | new_base_mantissa);
         let new_extra_exponent = (new_exponent >> 8) as u16;
 
         Self { base: new_base, extra_exponent: new_extra_exponent }
@@ -377,8 +382,8 @@ fn test_my_fp48_operations() {
 
     // println!("zero:       {}", MyFp48::zero().to_record_f32().unwrap());
     // println!("one:        {}", MyFp48::one().to_record_f32().unwrap());
-    println!("a:          {}", a.to_record_f32().unwrap());
-    println!("b:          {}", b.to_record_f32().unwrap());
+    println!("a:          {}", a.to_record_bytes().unwrap());
+    println!("b:          {}", b.to_record_bytes().unwrap());
 
     println!("a == b is     {}", a == b);
     println!("a < b is     {}", a < b);
@@ -408,7 +413,7 @@ fn test_value_and_round() {
 
     // value
     let a = MyFp48::new(3.14154052734375);
-    assert_eq!(a.to_record_f32().unwrap(), 3.14154052734375);
+    // assert_eq!(a.to_record_bytes().unwrap(), 3.14154052734375);
 
     let b = 2.25f32.round() as u8;
     println!("{b}");

@@ -36,14 +36,14 @@ pub fn image_decompression(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, si
     image
 }
 
-fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
+fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<u16>) -> Vec<u8> {
 
     assert_eq!(unit_size, unit_coeffs.len());
     let mut temp_unit: Vec<MyFp48> = vec![MyFp48::ZERO; unit_size];
 
     let mut zero_run_point = unit_size;
     for &coeff in unit_coeffs.iter().rev() {
-        if coeff != 0f32 {break;}
+        if coeff != 0u16 {break;}
         zero_run_point -= 1;
     }
     
@@ -52,7 +52,7 @@ fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
     for (i, &coeff) in (0..zero_run_point).zip(unit_coeffs) {
         let log_size = (unit_size as f64).log2();
         let forecast_coeff = (7.0 - i as f64 * (log_size - 1.0)).trunc() as i32;
-        let actuall_coeff = MyFp48::from_record_f32(coeff) * MyFp48::exp2(forecast_coeff);
+        let actuall_coeff = MyFp48::from_record_bytes(coeff) * MyFp48::exp2(forecast_coeff);
 
         temp_unit.iter_mut().zip(power_x.iter()).for_each(|(a,b)| *a += *b*actuall_coeff);
         power_x.hadamard_product(&x);
@@ -66,9 +66,9 @@ fn unit_decompression(unit_size:usize, unit_coeffs:&Vec<f32>) -> Vec<u8> {
     } ).collect()
 }
 
-fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32)) -> Vec<Vec<LinkedList<(u16, Vec<f32>)>>> {
+fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32)) -> Vec<Vec<LinkedList<(u16, Vec<u16>)>>> {
 
-    let mut yamakagashi: Vec<Vec<LinkedList<(u16, Vec<f32>)>>> = Vec::with_capacity(number_of_colors as usize);
+    let mut yamakagashi: Vec<Vec<LinkedList<(u16, Vec<u16>)>>> = Vec::with_capacity(number_of_colors as usize);
 
     let mut index: usize = 0;
     for _ in 0..number_of_colors {
@@ -76,7 +76,7 @@ fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32))
         let mut yamakagashi_row = Vec::with_capacity(size.1 as usize);
         for _ in 0..size.1 {
 
-            let mut yamakagashi_units: LinkedList<(u16, Vec<f32>)> = LinkedList::new();
+            let mut yamakagashi_units: LinkedList<(u16, Vec<u16>)> = LinkedList::new();
             
             let mut row_size = 0;
             while row_size < size.0 {
@@ -84,8 +84,8 @@ fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32))
                 index += 2;
                 let mut unit_coeffs = Vec::with_capacity(unit_size as usize);
                 for _ in 0..unit_size {
-                    unit_coeffs.push(f32::from_be_bytes(yamakagashi_bytes[index..index+4].try_into().unwrap()));
-                    index += 4;
+                    unit_coeffs.push(u16::from_be_bytes(yamakagashi_bytes[index..index+2].try_into().unwrap()));
+                    index += 2;
                 }
 
                 yamakagashi_units.push_back((unit_size, unit_coeffs));
