@@ -263,11 +263,25 @@ impl ops::Add for MyFp48 {
     }
 }
 
+impl ops::AddAssign for MyFp48 {
+
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl ops::Sub for MyFp48 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
         self.subtract(rhs)
+    }
+}
+
+impl ops::SubAssign for MyFp48 {
+
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
     }
 }
 
@@ -279,11 +293,33 @@ impl ops::Mul for MyFp48 {
     }
 }
 
+impl ops::MulAssign for MyFp48 {
+
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
 impl ops::Div for MyFp48 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
         self.divide(rhs)
+    }
+}
+
+impl ops::DivAssign for MyFp48 {
+
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
+}
+
+impl ops::Neg for MyFp48 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self { base: self.base.neg(), extra_exponent: self.extra_exponent }
     }
 }
 
