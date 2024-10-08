@@ -9,18 +9,18 @@ use std::{cmp::Ordering, fmt, ops};
 
 const BASE_MANTISSA_AND_SIGN_MASK: u32 = 0x807F_FFFF;
 
-#[derive(Clone, Copy)]
-struct MyFp48 {
+#[derive(Clone, Copy, Debug)]
+pub struct MyFp48 {
 
     // MyFp48 is a*2^exp * 2^(extension*2^8)
     // MyFp48s exp = uuuu_uuuu_uuuu_uuuu_eeee_eeee, exp - (2^23-1) is actually exponent
-    base: f32,
-    extra_exponent: u16,
+    pub base: f32,
+    pub extra_exponent: u16,
 }
 
 impl MyFp48 {
     // create new MyFp48
-    fn new(base: f32) -> Self {
+    pub fn new(base: f32) -> Self {
 
         let base_exponent = ((base.to_bits() >> 23) & 0xFF) as i32 - ((1 << 7) - 1);
         let new_exponent = (base_exponent + (1 << 23) - 1) as u32;
@@ -41,7 +41,7 @@ impl MyFp48 {
     
     // pub fn default() -> Self { MyFp48::ZERO }
     // create new MyFp48 exp2
-    fn exp2(exponent: i32) -> Self {
+    pub fn exp2(exponent: i32) -> Self {
 
         if (exponent < - (1 << 23)) | (((1 << 23) - 1) < exponent) { panic!("exp needs satisfy -(1 << 23) < exp < 2 << 23") }
 
@@ -56,7 +56,7 @@ impl MyFp48 {
     fn is_nan(&self) -> bool { (self.exponent() == (1 << 23) - 1) & (self.mantissa().abs() == 1.0) }
 
     // get extended exponent
-    fn exponent(&self) -> i32 {
+    pub fn exponent(&self) -> i32 {
         // no biased exponent
 
         let base_exponent = (self.base.to_bits() >> 23) & 0xFF;
@@ -88,7 +88,7 @@ impl MyFp48 {
     }
 
     // get sign
-    fn sign(&self) -> i32 {
+    pub fn sign(&self) -> i32 {
         if self.base.is_sign_negative() { -1 } else { 1 }
     }
 
