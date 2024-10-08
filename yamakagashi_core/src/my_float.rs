@@ -53,8 +53,26 @@ impl MyFp48 {
         Self { base: new_base, extra_exponent: new_extra_exponent }
     }
 
-    fn is_nan(&self) -> bool { (self.exponent() == (1 << 23) - 1) & (self.mantissa().abs() == 1.0) }
+    pub fn is_normal(&self) -> bool {
+        let self_exponent = self.exponent();
+        -(1 << 23) + 1 < self_exponent && self_exponent < (1 << 23)
+    }
 
+    pub fn is_zero(&self) -> bool { self.exponent() == -(1 << 23)+1 && self.mantissa_and_sign().abs() == 1.0 }
+
+    pub fn round_u8(&self) -> Result<u8, ()> {
+
+        let exponent = self.exponent();
+        let mantissa = self.mantissa_and_sign();
+
+        if exponent <= -127 { Ok(0u8) }
+        else if 128 <= exponent { Err(()) }
+        else {
+            let f32_exponent = (exponent + (1 << 7)-1) as u32;
+            let self_to_f32 = f32::from_bits((mantissa.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | (f32_exponent << 23));
+            Ok(self_to_f32.round() as u8)
+        }
+    }
     // get extended exponent
     pub fn exponent(&self) -> i32 {
         // no biased exponent
@@ -66,25 +84,34 @@ impl MyFp48 {
     }
 
     // calc value
-    fn value(&self) -> Result<f32, &str> {
+    pub fn to_record_f32(&self) -> Result<f32, &str> {
  
         // out f32 havn't NaN and denormal number, but 0 is existing
         let exponent = self.exponent();
         let mantissa_and_sign = self.mantissa_and_sign();
 
-        if exponent == 1 - (1 << 23) {
-            if self.base.to_bits() & 0x007F_FFFF == 0x0 { Ok(f32::from_bits(self.base.to_bits() & 0x8000_0000)) } // 0 or -0
-            else { Err("this MyFp48 is denormal number") }
-        } else if exponent <= -127 {
+        if self.is_zero() { Ok(0.0) }
+        else if exponent <= -127 {
             Err("can't express f32, because of this MyFp48 is too small")
         // } else if exponent == (1 << 25) - 1 - ((1 << 23) - 1) { 
         } else if 128 <= exponent {
             Err("can't express f32, because of this MyFp48 is too big")
         } else {
-            let base_exponent = (exponent & 0xFF) as u32 + (1 << 7) - 1;
-            Ok(f32::from_bits((mantissa.to_bits() & 0x807F_FFFF) | base_exponent << 23))
+            let base_exponent = (exponent + (1 << 7) - 1) as u32 & 0xFF;
+            Ok(f32::from_bits((mantissa_and_sign.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | base_exponent << 23))
         }
 
+    }
+
+    pub fn from_record_f32(input: f32) -> Self {
+
+        if input == 0.0 { return MyFp48::ZERO; }
+        let new_exponent = ((input.to_bits() >> 23) & 0xFF) + (1 << 23) - (1 << 7);
+
+        let new_base = f32::from_bits((input.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent & 0xFF) << 23));
+        let new_extra_exponent = (new_exponent >> 8) as u16;
+
+        Self { base: new_base, extra_exponent: new_extra_exponent }
     }
 
     // get sign
@@ -264,17 +291,15 @@ impl PartialEq for MyFp48 {
 
     fn eq(&self, other: &Self) -> bool {
         
-        if self.is_nan() || other.is_nan() { return false; }
-        
-        self.base == other.base && self.extra_exponent == other.extra_exponent
+        if self.is_normal() && other.is_normal() { return self.base == other.base && self.extra_exponent == other.extra_exponent; }
+        else if self.is_zero() && other.is_zero() { return true; }
+        else { return false; }
     }
 }
 
 impl PartialOrd for MyFp48 {
     
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        
-        if self.is_nan() || other.is_nan() { return None; }
         
         let self_exponent = self.exponent();
         let other_exponent = other.exponent();
