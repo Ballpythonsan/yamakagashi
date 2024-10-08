@@ -7,6 +7,8 @@
 
 use std::{cmp::Ordering, fmt, ops};
 
+const BASE_MANTISSA_AND_SIGN_MASK: u32 = 0x807F_FFFF;
+
 #[derive(Clone, Copy)]
 struct MyFp48 {
 
@@ -23,15 +25,21 @@ impl MyFp48 {
         let base_exponent = ((base.to_bits() >> 23) & 0xFF) as i32 - ((1 << 7) - 1);
         let new_exponent = (base_exponent + (1 << 23) - 1) as u32;
 
-        let new_base = f32::from_bits((base.to_bits() & 0b1000_0000_0111_1111_1111_1111_1111_1111) | ((new_exponent & 0b0000_0000_0000_0000_0000_0000_1111_1111) << 23));
-        let new_extra_exponent = ((new_exponent & 0b0000_0000_1111_1111_1111_1111_0000_0000) >> 8) as u16;
+        let new_base = f32::from_bits((base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent & 0xFF) << 23));
+        let new_extra_exponent = (new_exponent >> 8) as u16;
         
         Self { base: new_base, extra_exponent: new_extra_exponent }
     }
 
-    fn one() -> Self { Self { base: f32::from_bits(0x7F80_0000), extra_exponent: 0x7FFF }}
+    pub const ONE: MyFp48 = Self { base: f32::INFINITY, extra_exponent: 0x7FFF }; // Self { base: f32::from_bits(0x7F80_0000), extra_exponent: 0x7FFF }; // 0b0(0111_1111_1111_1111)111_1111_1000_0000_0000_0000_0000_0000
     
-    fn zero() -> Self { Self { base: f32::from_bits(0x0), extra_exponent: 0x0 }}
+    pub const ZERO: MyFp48 = Self { base: 0f32, extra_exponent: 0x0 }; // Self { base: f32::from_bits(0x0), extra_exponent: 0x0 }; // 0b0(0000_0000_0000_0000)000_0000_0000_0000_0000_0000_0000_0000
+    
+    // pub const INFINITY: MyFp48 = Self { base: f32::INFINITY, extra_exponent: 0xFFFF};
+
+    // pub const NEG_INFINITY: MyFp48 = Self { base: f32::NEG_INFINITY, extra_exponent: 0xFFFF};
+    
+    // pub fn default() -> Self { MyFp48::ZERO }
     // create new MyFp48 exp2
     fn exp2(exponent: i32) -> Self {
 
@@ -39,8 +47,8 @@ impl MyFp48 {
 
         let new_exponent = (exponent + ((1 << 23) - 1)) as u32;
         
-        let new_base = ((new_exponent & 0b0000_0000_0000_0000_0000_0000_1111_1111) << 23) as f32;
-        let new_extra_exponent = ((new_exponent & 0b0000_0000_1111_1111_1111_1111_0000_0000) >> 8) as u16;
+        let new_base = f32::from_bits((new_exponent & 0xFF) << 23);
+        let new_extra_exponent = ((new_exponent & 0xFF_FF00) >> 8) as u16;
         
         Self { base: new_base, extra_exponent: new_extra_exponent }
     }
@@ -54,14 +62,15 @@ impl MyFp48 {
         let base_exponent = (self.base.to_bits() >> 23) & 0xFF;
         let exponent = ((self.extra_exponent as u32) << 8) | base_exponent;
         
-        exponent as i32 - ((1 << 23) - 1)
+        exponent as i32 - (1 << 23) + 1
     }
 
     // calc value
     fn value(&self) -> Result<f32, &str> {
  
+        // out f32 havn't NaN and denormal number, but 0 is existing
         let exponent = self.exponent();
-        let mantissa = self.mantissa();
+        let mantissa_and_sign = self.mantissa_and_sign();
 
         if exponent == 1 - (1 << 23) {
             if self.base.to_bits() & 0x007F_FFFF == 0x0 { Ok(f32::from_bits(self.base.to_bits() & 0x8000_0000)) } // 0 or -0
@@ -84,10 +93,10 @@ impl MyFp48 {
     }
 
     // get mantissa
-    fn mantissa(&self) -> f32 {
+    pub fn mantissa_and_sign(&self) -> f32 {
 
         let base_bits = self.base.to_bits();
-        let mantissa_bits = base_bits & 0x807F_FFFF;
+        let mantissa_bits = base_bits & BASE_MANTISSA_AND_SIGN_MASK;
         let mantissa = f32::from_bits(mantissa_bits | 0x3F80_0000);
 
         mantissa
@@ -108,12 +117,12 @@ impl MyFp48 {
             let new_diff2 = (127 + exponent_diff_s/2 - exponent_diff_s) << 23;
 
             let adjusted_self_base=
-                if self_exponent > other_exponent {f32::from_bits((self.base.to_bits() & 0x807F_FFFF) | new_diff1)}
-                else {f32::from_bits((self.base.to_bits() & 0x807F_FFFF) | new_diff2)};
+                if self_exponent > other_exponent {f32::from_bits((self.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff1)}
+                else {f32::from_bits((self.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff2)};
             
             let adjusted_other_base=
-                if self_exponent < other_exponent {f32::from_bits((other.base.to_bits() & 0x807F_FFFF) | new_diff1)}
-                else {f32::from_bits((other.base.to_bits() & 0x807F_FFFF) | new_diff2)};
+                if self_exponent < other_exponent {f32::from_bits((other.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff1)}
+                else {f32::from_bits((other.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff2)};
 
             let temp_base = adjusted_self_base + adjusted_other_base;
             if temp_base.is_infinite() {panic!("add is infinite")}
@@ -121,12 +130,12 @@ impl MyFp48 {
             let diff_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - (new_diff1 >> 23) as i32;
             let new_exponent: u32 = (self_exponent.max(other_exponent) + diff_exponent + (1 << 23) - 1) as u32;
 
-            let new_base = f32::from_bits((temp_base.to_bits() & 0x807F_FFFF) | ((new_exponent & 0xFF) << 23));
+            let new_base = f32::from_bits((temp_base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent & 0xFF) << 23));
             let new_extra_exponent = (new_exponent >> 8) as u16;
 
             Self { base: new_base, extra_exponent: new_extra_exponent }
         } else {
-            println!("It's too big differense, \"add\" may failed");
+            // println!("It's too big differense, \"add\" may failed");
             if self.extra_exponent < other.extra_exponent { other }
             else { self } // self.extra_exponent > other.extra_exponent
         }
@@ -147,12 +156,12 @@ impl MyFp48 {
             let new_diff2 = (127 + exponent_diff_s/2 - exponent_diff_s) << 23;
 
             let adjusted_self_base=
-                if self_exponent > other_exponent {f32::from_bits((self.base.to_bits() & 0x807F_FFFF) | new_diff1)}
-                else {f32::from_bits((self.base.to_bits() & 0x807F_FFFF) | new_diff2)};
+                if self_exponent > other_exponent {f32::from_bits((self.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff1)}
+                else {f32::from_bits((self.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff2)};
             
             let adjusted_other_base=
-                if self_exponent < other_exponent {f32::from_bits((other.base.to_bits() & 0x807F_FFFF) | new_diff1)}
-                else {f32::from_bits((other.base.to_bits() & 0x807F_FFFF) | new_diff2)};
+                if self_exponent < other_exponent {f32::from_bits((other.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff1)}
+                else {f32::from_bits((other.base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | new_diff2)};
 
             let temp_base = adjusted_self_base - adjusted_other_base;
             if temp_base.is_infinite() {panic!("add is infinite")}
@@ -160,12 +169,12 @@ impl MyFp48 {
             let diff_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - (new_diff1 >> 23) as i32;
             let new_exponent: u32 = (self_exponent.max(other_exponent) + diff_exponent + (1 << 23) - 1) as u32;
 
-            let new_base = f32::from_bits((temp_base.to_bits() & 0x807F_FFFF) | ((new_exponent & 0xFF) << 23));
+            let new_base = f32::from_bits((temp_base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent & 0xFF) << 23));
             let new_extra_exponent = (new_exponent >> 8) as u16;
 
             Self { base: new_base, extra_exponent: new_extra_exponent }
         } else {
-            println!("It's too big differense, \"sub\" may failed");
+            // println!("It's too big differense, \"sub\" may failed");
             if self_exponent < other_exponent { Self { base: f32::from_bits(other.base.to_bits() ^ 0x8000_0000), extra_exponent: other.extra_exponent }} // -other
             else { self } // self.extra_exponent > other.extra_exponent
         }
@@ -176,13 +185,13 @@ impl MyFp48 {
 
         if self.is_zero() || other.is_zero() { return Self::ZERO; }
         // a*2^exp * 2^(extension*2^8) * b*2^exp2 * 2^(extension2*2^8) = (a*2^exp)*(b*2^exp2)*2^((extension+extension2)*2^8)
-        let temp_base = self.mantissa() * other.mantissa();
+        let temp_base = self.mantissa_and_sign() * other.mantissa_and_sign();
         if temp_base.is_nan() || temp_base.is_infinite() { panic!("base is Nan or infinity!, I'll write this pattern later") }
 
         let temp_base_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - ((1 << 7) - 1); // todo
         let new_exponent = self.exponent() + other.exponent() + temp_base_exponent + ((1 << 23) - 1);
 
-        let new_base =  f32::from_bits((temp_base.to_bits() & 0b1000_0000_0111_1111_1111_1111_1111_1111) | ((new_exponent as u32 & 0xFF) << 23));
+        let new_base =  f32::from_bits((temp_base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | ((new_exponent as u32 & 0xFF) << 23));
         let new_extra_exponent = (new_exponent >> 8) as u16;
         
         Self { base: new_base, extra_exponent: new_extra_exponent } 
@@ -194,13 +203,13 @@ impl MyFp48 {
         if other.is_zero() { panic!("div 0!") }
         if self.is_zero() { return self; }
         // a*2^exp * 2^(extension*2^8) / b*2^exp2 * 2^(extension2*2^8) = (a*2^exp)/(b*2^exp2)*2^((extension-extension2)*2^8)
-        let temp_base = self.mantissa() / other.mantissa();
+        let temp_base = self.mantissa_and_sign() / other.mantissa_and_sign();
         if temp_base.is_nan() || temp_base.is_infinite() { panic!("base is Nan or infinity!, I'll write this pattern later") }
 
         let temp_base_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - ((1 << 7) - 1); // todo 
         let new_exponent = self.exponent() - other.exponent() + temp_base_exponent + ((1 << 23) - 1);
 
-        let new_base =  f32::from_bits((temp_base.to_bits() & 0b1000_0000_0111_1111_1111_1111_1111_1111) | (((new_exponent as u32) & 0xFF) << 23));
+        let new_base =  f32::from_bits((temp_base.to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | (((new_exponent as u32) & 0xFF) << 23));
         let new_extra_exponent = (new_exponent >> 8) as u16;
         
         Self { base: new_base, extra_exponent: new_extra_exponent }
@@ -212,7 +221,7 @@ impl fmt::Display for MyFp48 {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         
-        let mantissa = self.mantissa();
+        let mantissa = self.mantissa_and_sign();
         let exponent = self.exponent();
 
         write!(f, "{} x 2^{}", mantissa, exponent)
@@ -282,7 +291,7 @@ impl PartialOrd for MyFp48 {
             else { return Some(Ordering::Less); }
         }
 
-        self.mantissa().partial_cmp(&other.mantissa())
+        self.mantissa_and_sign().partial_cmp(&other.mantissa_and_sign())
     }
 }
 
