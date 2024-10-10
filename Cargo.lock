@@ -334,11 +334,11 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap",
- "yamakagashi-core",
+ "yamakagashi_core",
 ]
 
 [[package]]
-name = "yamakagashi-core"
+name = "yamakagashi_core"
 version = "0.1.0"
 dependencies = [
  "libflate",
