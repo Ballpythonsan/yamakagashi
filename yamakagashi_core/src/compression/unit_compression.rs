@@ -111,6 +111,23 @@ fn round_to_record_u16(vec:Vec<MyFp48>) -> Vec<u16>{
 
     let size = vec.len();
     let mut out_vec: Vec<u16> = Vec::with_capacity(size); // coeff*(size/2)^i ~ 2^7 -> coeff ~ 2^-n? // coeff ~ 2^(7-i*(log2(size)-1))
+
+    // when is vec constant functions-coeffs
+    let is_constant: bool = vec.iter().skip(1).fold(true, |acc, ele| acc & ele.is_zero() );
+    if is_constant {
+
+        let adjusted_coeff = match vec[0].round_u8() {
+            Ok(value) => {
+                MyFp48::new(value as f32)*MyFp48::exp2(-7)
+            },
+            Err(_) => panic!("can't round u8, because too big"),
+        };
+
+        out_vec = vec![0; size];
+        out_vec[0] = adjusted_coeff.to_record_bytes().unwrap(); // unwrap()? don't worry, after round_u8!
+
+        return out_vec;
+    }
     
     vec.iter().enumerate().for_each(|(i, coeff)| {
 
