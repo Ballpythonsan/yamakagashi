@@ -1,7 +1,5 @@
 /target
 /.vscode
+/images
 index.html
-*.bmp
-*.png
-*.yama
 *.ps1
