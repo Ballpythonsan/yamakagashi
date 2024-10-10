@@ -1,4 +1,5 @@
 mod my_vector;
+mod my_float;
 mod compression;
 mod decompression;
 use std::io::{Read, Write};

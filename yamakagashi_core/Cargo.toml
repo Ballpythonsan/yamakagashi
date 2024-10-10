@@ -1,8 +1,7 @@
 [package]
-name = "yamakagashi-core"
+name = "yamakagashi_core"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num = "0.4.3"
 libflate = "2.1.0"
