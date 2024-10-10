@@ -88,14 +88,14 @@ fn turning_points_of<'a, I>(row: I) -> LinkedList<usize> where I: Iterator<Item 
     turning_points
 }
 
-fn organize(yamakagashi: &Vec<Vec<LinkedList<(u16, Vec<u16>)>>>, pixels: usize) -> Vec<u8> {
+fn organize(yamakagashi: &Vec<Vec<LinkedList<(u16, Vec<u16>)>>>, subpixels: usize) -> Vec<u8> {
 
-    let pixel_bytes_size: usize = yamakagashi.len();
-    const COEFF_BYTES_SIZE: usize = 2; // u16 is 2bytes
+    const COEFF_BYTES_SIZE: usize = 2; // coeff u16 is 2bytes
+    const UNIT_BYTES_SIZE: usize = 2; // unit size u16 is 2bytes
 
 
-    let count = pixel_bytes_size*COEFF_BYTES_SIZE*pixels // count u16
-        + 2 * yamakagashi.iter().map(|page| page.iter().map(|row| row.len()).sum::<usize>()).sum::<usize>(); // count u16
+    let count = COEFF_BYTES_SIZE*subpixels // sum of all subpixels as bytes
+        + UNIT_BYTES_SIZE * yamakagashi.iter().map(|page| page.iter().map(|row| row.len()).sum::<usize>()).sum::<usize>(); // every unit has u16(2 bytes) unit size value
     let mut yamakagashi_bytes: Vec<u8> = Vec::with_capacity(count);
 
     for color_page in yamakagashi {
