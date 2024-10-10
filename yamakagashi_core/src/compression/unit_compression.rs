@@ -124,7 +124,19 @@ fn round_to_record_u16(vec:Vec<MyFp48>) -> Vec<u16>{
         };
 
         out_vec = vec![0; size];
-        out_vec[0] = adjusted_coeff.to_record_bytes().unwrap(); // unwrap()? don't worry, after round_u8!
+        out_vec[0] = match adjusted_coeff.to_record_bytes() {
+            Ok(record_f32) => record_f32,
+            Err("can't express f32, because of this MyFp48 abs is too small") => 0x0000,
+            Err("can't express f32, because of this MyFp48 abs is too big") => {
+                println!("can't express f32, because of this MyFp48 is too big");
+
+                println!("returns record f32 max instead");
+                // let record_u16_max: u16 = 
+                if adjusted_coeff.sign() == 1 { 0x7FFF }
+                else { 0xFFFF }
+            },
+            _ => panic!("may can't see you"),
+        };
 
         return out_vec;
     }
@@ -148,7 +160,7 @@ fn round_to_record_u16(vec:Vec<MyFp48>) -> Vec<u16>{
                 else { 0xFFFF };
                 out_vec.push(record_u16_max);
             },
-            _ => (),
+            _ => panic!("may can't see you"),
         }
     });
     
