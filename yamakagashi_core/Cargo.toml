@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libflate = "2.1.0"
+xz2 = "0.1.7"
