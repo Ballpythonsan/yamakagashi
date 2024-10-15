@@ -92,15 +92,14 @@ fn organize(yamakagashi_bytes: &Vec<u8>, number_of_colors: u8, size: (u32, u32))
 
                 row_size += unit_size as u32;
             }
-            if row_size != size.0 {
-                panic!("This is incorrect file, row size and sum of unit size are not same!");
-            }
+            assert_eq!(row_size, size.0, "This is incorrect file, row size and sum of unit size are not same!");
+
             yamakagashi_row.push(yamakagashi_units);
         }
         yamakagashi.push(yamakagashi_row);
     }
 
-    assert_eq!(index, yamakagashi_bytes.len());
+    assert_eq!(index, yamakagashi_bytes.len(), "This is incorrect file, need data len and actually data len are not same!");
 
     yamakagashi
 }
