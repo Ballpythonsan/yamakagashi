@@ -42,7 +42,7 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
 
     for i in 0..n {
         let m = i / 2;
-        c[i] = b.dot(&power_x);
+        c[i] = b.dot(power_x.iter());
         let temp_l = power_x.sq_norm();
         l[i] = if temp_l.is_normal() || temp_l.is_zero() { temp_l }
         else { panic!("value is NORMAL!, degree is {i}, unit size is {n}"); };
@@ -87,7 +87,7 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         }
 
         // quality check
-        sse = b_sq_norm - a.dot(&c);
+        sse = b_sq_norm - a.dot(c.iter());
         if i == 0 {
             ssd = sse;
             if ssd <= MyFp48::new((n*13*13) as f32) { // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
