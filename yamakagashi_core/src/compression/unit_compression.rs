@@ -87,7 +87,7 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
         }
 
         // quality check
-        sse = b_sq_norm - a.dot(c.iter());
+        sse = b_sq_norm - a.iter().take(i+1).dot(c.iter().take(i+1));
         if i == 0 {
             ssd = sse;
             if ssd <= MyFp48::new((n*13*13) as f32) { // sqrt((ssd/MAX^2)/n) <= 13/255 ~ 0.05
