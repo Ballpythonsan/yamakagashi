@@ -31,11 +31,8 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
     let mut c = vec![MyFp48::ZERO; n];
     let mut l = vec![MyFp48::ZERO; n];
     let mut f = vec![MyFp48::ZERO; n];
+    let mut g = vec![MyFp48::ZERO; n];
     let mut power_x = vec![MyFp48::ONE; n];
-
-    // let mut error_1 = MyFp48::ZERO;
-    let mut error_2 = MyFp48::ZERO; // push in for-loop later
-    //let mut error_a = MyFp48::ZERO;
 
     let mut ssd = MyFp48::ZERO;
     let mut sse = MyFp48::ZERO;
@@ -43,48 +40,46 @@ pub fn unit_compression(b: std::iter::Take<std::iter::Skip<std::iter::Take<std::
     for i in 0..n {
         let m = i / 2;
         c[i] = b.dot(power_x.iter());
-        let temp_l = power_x.sq_norm();
-        l[i] = if temp_l.is_normal() || temp_l.is_zero() { temp_l }
-        else { panic!("value is NORMAL!, degree is {i}, unit size is {n}"); };
+        l[i] = power_x.sq_norm();
         power_x.hadamard_product(&x);
 
         // make new f
         if i == 0 {f[0] = MyFp48::ONE / l[0];}
-        else if i == 1 {f[1] = MyFp48::ONE / l[1];}
+        else if i == 1 {g[0] = MyFp48::ONE / l[1];}
         else {
             if i % 2 == 0 {
-                let error_1 = l[m..2 * m].dot(f.iter().skip(0).step_by(2).take(m));
-                error_2 = l[m + 1..2 * m + 1].dot(f.iter().skip(1).step_by(2).take(m));
-                assert_ne!(error_1-error_2, MyFp48::ZERO);
-                f.iter_mut().skip(0).step_by(2).take(m).for_each(|a| *a /= error_1-error_2);
-                for j in 0..m {
-                    let _temp = f[1 + 2 * j];
-                    f[2 + 2 * j] -= _temp / (error_1-error_2);
-                }
+                let error_f = l[m .. 2*m].dot(f.iter().take(m));
+                let error_g = l[m+1 .. 2*m+1].dot(g.iter().take(m));
+                let diff = error_f-error_g;
+                assert_ne!(diff, MyFp48::ZERO);
+                f.iter_mut().take(m).for_each(|a| *a /= diff);
+                f.iter_mut().skip(1).take(m).zip(g.iter().take(m)).for_each(|(_f, &_g)| *_f -= _g/diff );
+
             } else {
-                let error_1 = l[m + 1..2 * m + 1].dot(f.iter().skip(0).step_by(2).take(m + 1));
-                // error_2 = &l[m   : 2*m].dot(&f.iter().skip(0).step_by(2).take(m));
-                assert_ne!(error_1-error_2, MyFp48::ZERO);
-                f.iter_mut().skip(1).step_by(2).take(m).for_each(|a| *a /= error_2-error_1);
-                for j in 0..m + 1 {
-                    let _temp = f[2 * j];
-                    f[1 + 2 * j] -= _temp / (error_2-error_1);
-                }
+                let error_f = l[m+1 .. 2*m+2].dot(f.iter().take(m+1));
+                let error_g = l[m+1 .. 2*m+1].dot(g.iter().take(m));
+                let diff = error_g-error_f;
+                assert_ne!(diff, MyFp48::ZERO);
+                g.iter_mut().take(m).for_each(|a| *a /= diff);
+                g.iter_mut().take(m+1).zip(f.iter().take(m+1)).for_each(|(_g, &_f)| *_g -= _f/diff );
             }
         }
 
         // make new a
         if i % 2 == 0 {
-            let error_a = l[m..2 * m].dot(a.iter().skip(0).step_by(2).take(m));
-            for j in 0..m + 1 {
-                a[2 * j] += (c[i] - error_a) * f[i % 2 + 2 * j]
-            }
+            let error_a = l[m .. 2*m].dot(a.iter().skip(0).step_by(2).take(m));
+            let diff = c[i] - error_a;
+            a.iter_mut().skip(0).step_by(2).take(m+1).zip(f.iter().take(m+1)).for_each(|(_a, &_f)| *_a += diff*_f );
         } else {
-            let error_a = l[m + 1..2 * m + 1].dot(a.iter().skip(1).step_by(2).take(m));
-            for j in 0..m + 1 {
-                a[1 + 2 * j] += (c[i] - error_a) * f[1 + 2 * j]
-            }
+            let error_a = l[m+1 .. 2*m+1].dot(a.iter().skip(1).step_by(2).take(m));
+            let diff = c[i] - error_a;
+            a.iter_mut().skip(1).step_by(2).take(m+1).zip(g.iter().take(m+1)).for_each(|(_a, &_g)| *_a += diff*_g );
         }
+        // It can be reduced to this
+        // let error_a = l[m+i%2 .. 2*m+i%2].dot(a.iter().skip(i%2).step_by(2).take(m));
+        // let diff = c[i] - error_a;
+        //     a.iter_mut().skip(i%2).step_by(2).take(m+1).zip( { if i%2 == 0 { &f } else { &g } }.iter().take(m+1) ).for_each(|(_a, &_fg)| *_a += diff*_fg );
+
 
         // quality check
         sse = b_sq_norm - a.iter().take(i+1).dot(c.iter().take(i+1));
@@ -178,7 +173,11 @@ fn unit_compression_test() {
      = test_case.iter().skip(0).step_by(1).take(test_len).skip(0).take(test_len);
 
     let comp = unit_compression(test_iter, 85);
-    //println!("{:?}", comp);
+    println!("{:?}", comp);
+    let ans = 
+    [44585, 48348, 14250, 14013, 47434, 49898, 12976, 17532, 13318, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ;
+    assert_eq!(comp, ans);
     // if comp[0].is_nan() {println!("NaN!")}
     // else {
     //     println!("NOT NaN (T_T)");
