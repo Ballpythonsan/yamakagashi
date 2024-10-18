@@ -158,6 +158,7 @@ impl MyFp48 {
 
             let temp_base = adjusted_self_base + adjusted_other_base;
             if temp_base.is_infinite() {panic!("add is infinite")}
+            if temp_base == 0.0 { return MyFp48::ZERO; }
             
             let diff_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - (new_diff1 >> 23) as i32;
             let new_exponent: u32 = (self_exponent.max(other_exponent) + diff_exponent + (1 << 23) - 1) as u32;
@@ -197,6 +198,7 @@ impl MyFp48 {
 
             let temp_base = adjusted_self_base - adjusted_other_base;
             if temp_base.is_infinite() {panic!("add is infinite")}
+            if temp_base == 0.0 { return MyFp48::ZERO; }
             
             let diff_exponent = ((temp_base.to_bits() >> 23) & 0xFF) as i32 - (new_diff1 >> 23) as i32;
             let new_exponent: u32 = (self_exponent.max(other_exponent) + diff_exponent + (1 << 23) - 1) as u32;
