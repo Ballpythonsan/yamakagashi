@@ -63,7 +63,7 @@ fn main() {
                 Some(output_path) => output_path,
                 _ => &PathBuf::from(input_path.file_name().unwrap()).with_extension("yama"),
             };
-            const DEFAULT_QUALITY: i32 = 85;
+            const DEFAULT_QUALITY: i32 = 50;
             let quality = match matches.get_one::<i32>("quality") {
                 Some(quality) => *quality,
                 _ => DEFAULT_QUALITY
