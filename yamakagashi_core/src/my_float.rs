@@ -84,21 +84,21 @@ impl MyFp48 {
     }
 
     // convert to record bytes
-    // sign 1bit, diff exponent 5bit, fracsion 10bit
-    pub fn to_record_bytes(&self) -> Result<u16, &str> {
+    // sign 1bit, diff exponent 6bit, fracsion 9bit
+    pub fn to_record_bytes_with_forecast(&self, forecast: i32) -> Result<u16, &str> {
  
-        let exponent = self.exponent();
+        let exponent = self.exponent() + forecast;
         let mantissa_and_sign = self.mantissa_and_sign();
 
         if self.is_zero() { Ok(0x0000) }
-        else if exponent <= -16 {
-            Err("can't express f32, because of this MyFp48 abs is too small")
-        } else if 16 < exponent {
-            Err("can't express f32, because of this MyFp48 abs is too big")
+        else if exponent <= -24 {
+            Err("can't express f16, because of this MyFp48 abs is too small")
+        } else if 24 < exponent {
+            Err("can't express f16, because of this MyFp48 abs is too big")
         } else {
-            let new_sign = if self.sign() == 1 { 0u16 } else {0x8000};
-            let new_exponent = (((exponent + (1 << 4) - 1) & 0x1F) << 10) as u16;
-            let new_mantissa = ((mantissa_and_sign.to_bits() & 0x007F_FFFF) >> 13) as u16;
+            let new_sign = if self.sign() == 1 { 0x0000 } else {0x8000};
+            let new_exponent = (((exponent + (1 << 5) - 1) & 0x3F) << 9) as u16;
+            let new_mantissa = ((mantissa_and_sign.to_bits() & 0x007F_FFFF) >> 14) as u16;
 
             Ok(new_sign | new_exponent | new_mantissa)
         }
@@ -107,11 +107,11 @@ impl MyFp48 {
 
     pub fn from_record_bytes(input: u16) -> Self {
 
-        if input == 0u16 { return MyFp48::ZERO; }
+        if input == 0x0000 { return MyFp48::ZERO; }
 
         let new_base_sign = (input as u32 & 0x8000) << 16;
-        let new_base_mantissa = (input as u32 & 0x03FF) << 13;
-        let new_exponent = ((input as u32 >> 10) & 0x1F) + (1 << 23) - (1 << 4);
+        let new_base_mantissa = (input as u32 & 0x01FF) << 14;
+        let new_exponent = ((input as u32 >> 9) & 0x3F) + (1 << 23) - (1 << 5);
 
         let new_base = f32::from_bits(new_base_sign | ((new_exponent & 0xFF) << 23) | new_base_mantissa);
         let new_extra_exponent = (new_exponent >> 8) as u16;
@@ -136,6 +136,9 @@ impl MyFp48 {
 
     // add
     fn add(self, other: Self) -> Self {
+
+        if self.is_zero() { return other; }
+        if other.is_zero() { return self; }
 
         let self_exponent = self.exponent();
         let other_exponent = other.exponent();
@@ -176,6 +179,9 @@ impl MyFp48 {
     // sub
     fn subtract(self, other: Self) -> Self {
         
+        if self.is_zero() { return -other; }
+        if other.is_zero() { return self; }
+
         let self_exponent = self.exponent();
         let other_exponent = other.exponent();
 
@@ -253,10 +259,20 @@ impl fmt::Display for MyFp48 {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         
-        let mantissa = self.mantissa_and_sign();
-        let exponent = self.exponent();
-
-        write!(f, "{} x 2^{}", mantissa, exponent)
+        if self.is_zero() {
+            if self.sign() == 1 {
+                write!(f, "0 x 2^0")
+            } else {
+                write!(f, "-0 x 2^0")
+            }
+        } else if self.exponent() == -1 {
+            write!(f, "{}", f32::from_bits((self.mantissa_and_sign().to_bits() & BASE_MANTISSA_AND_SIGN_MASK) | 0x3F00_0000))
+        } else {
+            let mantissa = self.mantissa_and_sign();
+            let exponent = self.exponent();
+            
+            write!(f, "{:+.4} x 2^{:3}", mantissa, exponent)
+        }
     }
 }
 
@@ -382,8 +398,8 @@ fn test_my_fp48_operations() {
 
     // println!("zero:       {}", MyFp48::zero().to_record_f32().unwrap());
     // println!("one:        {}", MyFp48::one().to_record_f32().unwrap());
-    println!("a:          {}", a.to_record_bytes().unwrap());
-    println!("b:          {}", b.to_record_bytes().unwrap());
+    println!("a:          {}", a.to_record_bytes_with_forecast(0).unwrap());
+    println!("b:          {}", b.to_record_bytes_with_forecast(0).unwrap());
 
     println!("a == b is     {}", a == b);
     println!("a < b is     {}", a < b);
@@ -399,13 +415,13 @@ fn test_my_fp48_operations() {
 #[test]
 fn test_compare() {
 
-    let a = MyFp48 { base:f32::from_bits(0x8EDD7048), extra_exponent: 0x8000 }; // 0(1000_0000_0000_0000)000_1110_1101_1101_0111_0000_0100_1000
-    let b = MyFp48::new(f32::EPSILON);
+    let a = MyFp48 { base:f32::from_bits(0x038E_7BA0), extra_exponent: 32767 }; // 0(1000_0000_0000_0000)000_1110_1101_1101_0111_0000_0100_1000
+    let b = MyFp48 { base:f32::from_bits(0x044F_6550), extra_exponent: 32767 };
 
-    println!("{:X} {:X}", a.base.to_bits(), a.extra_exponent);
-    println!("{:X} {:X}", b.base.to_bits(), b.extra_exponent);
-    println!("a < b is {}", a*MyFp48::exp2(-7) < b);
-    println!("{}",MyFp48::exp2(0))
+    // println!("{:X} {:X}", a.base.to_bits(), a.extra_exponent);
+    // println!("{:X} {:X}", b.base.to_bits(), b.extra_exponent);
+    println!("a < b is {}", a < b);
+    // println!("{}",MyFp48::exp2(0))
 }
 
 #[test]

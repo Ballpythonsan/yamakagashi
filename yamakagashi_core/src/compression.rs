@@ -59,27 +59,30 @@ fn turning_points_of<'a, I>(row: I) -> LinkedList<usize> where I: Iterator<Item 
     let mut prepoint = 0usize;
     let mut turning_points: LinkedList<usize> = LinkedList::new();
 
+    const MAX_WINDOW_WIDTH: usize = 50;
+    const DIFFERENCE: i64 = 5;
+
     for (point, ele) in (0..n).zip(row) {
         
         if point == 0 { continue; }
-        if point == u16::MAX as usize + match turning_points.back() {Some(x) => x,None => &0,} {
+        if point == u16::MAX as usize + prepoint {
             turning_points.push_back(point);
             prepoint = point;
             continue;
         }
 
-        let width = (point - prepoint) as i64;
-        if width == 1 {continue;}
+        let width = (point - prepoint).min(MAX_WINDOW_WIDTH);
+        if width == 1 { continue; }
 
 
-        let sum = if prepoint == 0 { s_row[point-1] - 0 } else { s_row[point-1] - s_row[prepoint-1] } as i64;
-        let bias_sum = if prepoint == 0 { l_row[point-1] - 0 } else { l_row[point-1] - l_row[prepoint-1] } as i64 - sum*(width+1)/2 - sum*prepoint as i64;
+        let sum = if point-width == 0 { s_row[point-1] - 0 } else { s_row[point-1] - s_row[point-width-1] } as i64;
+        let bias_sum = if point-width == 0 { l_row[point-1] - 0 } else { l_row[point-1] - l_row[point-width-1] } as i64 - sum*(width as i64+1)/2 - sum*(point-width) as i64;
         let sqsum = width*(width*width-1)/6;
-        let diff_coeff = bias_sum*2 / sqsum;
+        let diff_coeff = bias_sum*2 / sqsum as i64;
 
         
-        let yosou = sum/width + diff_coeff*(width+1)/2;
-        if (*ele as i64 - yosou).abs() > 5 {
+        let prediction = sum/width as i64 + diff_coeff*(width as i64+1)/2;
+        if (*ele as i64 - prediction).abs() > DIFFERENCE {
             turning_points.push_back(point);
             prepoint = point;
         }
