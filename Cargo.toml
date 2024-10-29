@@ -11,10 +11,4 @@ members = ["yamakagashi_core"]
 [dependencies]
 clap = { version = "4.5.4", features = ["cargo"] }
 byteorder = "1.5.0"
-yamakagashi_core = { version = "0.1.0" }
-
-[target.'cfg(not(debug_assertions))'.dependencies]
-yamakagashi_core = { version = "0.1.0" }
-
-[target.'cfg(debug_assertions)'.dependencies]
-yamakagashi_core = { path = "../yamakagashi_core"}
+yamakagashi_core = { path = "yamakagashi_core", version = "0.1.0" }
